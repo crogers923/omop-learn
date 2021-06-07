@@ -144,7 +144,7 @@ class FeatureSet():
             conn = self._db.engine.raw_connection()
             cur = conn.cursor()
             store = open(cache_file,'wb')
-            cur.execute(copy_sql, store)
+            cur.copy_expert(copy_sql, store)
             store.seek(0)
             print('Data loaded to buffer in {0:.2f} seconds'.format(
                 time.time()-t
@@ -260,7 +260,7 @@ class FeatureSet():
                 conn = self._db.engine.raw_connection()
                 cur = conn.cursor()
                 store = open(nontemporal_cache_file,'wb')
-                cur.execute(copy_sql, store)
+                cur.copy_expert(copy_sql, store)
                 store.seek(0)
                 print('Nontemporal data loaded to buffer in {0:.2f} seconds'.format(
                     time.time()-t

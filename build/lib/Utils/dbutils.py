@@ -12,7 +12,7 @@ import config
         
 class Database(object):  # noqa
 
-    def __init__(self, config_path, schema_name, connect_args, cdm_schema_project_name, echo=True): 
+    def __init__(self, config_path, schema_name, connect_args, cdm_schema_name, echo=False): 
         
         self.engine = sqlalchemy.create_engine(
             config_path,
@@ -25,11 +25,13 @@ class Database(object):  # noqa
         )
         self.cdmMeta = sqlalchemy.MetaData(
             bind=self.engine,
-            reflect=True
+            reflect=True,
+            schema=cdm_schema_name
         )
         self.selfMeta = sqlalchemy.MetaData(
             bind=self.engine,
-            reflect=True
+            reflect=True,
+            schema=schema_name
         )
         
     @contextmanager
@@ -174,7 +176,7 @@ class Database(object):  # noqa
             from {schema}.INFORMATION_SCHEMA.TABLES
             {where_clause};
         """.format(
-            where_clause = '' if schema is None
+            where_clasue = '' if schema is None
             else "where table_schema = '{}'".format(schema), schema=schema
         )
         return self.query(sql)['table_name']
