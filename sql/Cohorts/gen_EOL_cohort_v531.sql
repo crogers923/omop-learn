@@ -21,7 +21,7 @@ with
         select p.person_id
         from {cdm_schema}.person p
         where extract(
-            year from date '{training_end_date}'
+            YEAR from DATE '{training_end_date}'
         ) - p.year_of_birth > 70
     ),
     death_training_elig_counts as (
@@ -30,13 +30,13 @@ with
             o.observation_period_start_date as start,
             o.observation_period_end_date as finish,
             greatest(
-                least (
+                DATE_DIFF(least (
                     o.observation_period_end_date,
-                    date '{training_end_date}'
-                ) - greatest(
+                    DATE '{training_end_date}'
+                ), greatest(
                     o.observation_period_start_date,
-                    date '{training_start_date}'
-                ), 0
+                    DATE '{training_start_date}'
+                ), DAY), 0
             ) as num_days
         from {cdm_schema}.observation_period o
         inner join eligible_people p
@@ -50,7 +50,7 @@ with
         group by
             person_id
         having
-            sum(num_days) >= 0.95 * (date '{training_end_date}' - date '{training_start_date}')
+            sum(num_days) >= 0.50 * DATE_DIFF(DATE '{training_end_date}', DATE '{training_start_date}', DAY)
     ),
     death_testperiod_elig_counts as (
         select
@@ -58,17 +58,17 @@ with
             p.observation_period_start_date as start,
             p.observation_period_end_date as finish,
             greatest(
-                    least (
+                    DATE_DIFF(least (
                         p.observation_period_end_date,
-                        date (
-                            date '{training_end_date}'
-                            + interval '{gap}'
-                            + interval '{outcome_window}'
+                        DATE (
+                            DATE_ADD(DATE_ADD(DATE '{training_end_date}',
+                            INTERVAL {gap}),
+                            INTERVAL {outcome_window})
                         )
-                    ) - greatest(
+                    ), greatest(
                         p.observation_period_start_date,
-                        date '{training_end_date}'
-                    ), 0
+                        DATE '{training_end_date}'
+                    ), DAY), 0
             ) as num_days
         from {cdm_schema}.observation_period p
         inner join
@@ -88,41 +88,41 @@ with
         group by
             dtec.person_id, d.death_date
         having
-            (d.death_date >= date '{training_end_date}' + interval '{gap}' and
-             d.death_date <= date '{training_end_date}' + interval '{gap}' + interval '{outcome_window}')
+            (d.death_date >= DATE_ADD(DATE '{training_end_date}',INTERVAL {gap}) and
+             d.death_date <= DATE_ADD(DATE_ADD(DATE '{training_end_date}', INTERVAL {gap}), INTERVAL {outcome_window}))
         or
-            sum(num_days) >= 0.95 * extract(
-                epoch from (
-                    interval '{gap}'
-                    + interval '{outcome_window}' --epoch returns the number of seconds in gap + outcome_window
-                )
-            )/(24*60*60) --convert seconds to days
+            sum(num_days) >= 0.95 *
+                    UNIX_DATE(DATE_ADD(
+                        DATE_ADD(DATE_FROM_UNIX_DATE(0), INTERVAL {gap}),
+                    INTERVAL {outcome_window})) --epoch returns the number of seconds in gap + outcome_window
+            /(24*60*60) --convert seconds to days
     )
 
     select
         row_number() over (order by te.person_id) - 1 as example_id,
         te.person_id,
-        date '{training_start_date}' as start_date,
-        date '{training_end_date}' as end_date,
+        DATE '{training_start_date}' as start_date,
+        DATE '{training_end_date}' as end_date,
         d.death_date as outcome_date,
 
-        coalesce(
+        CAST(coalesce(
             (d.death_date between
-                date '{training_end_date}'
-                 + interval '{gap}'
+                DATE_ADD(DATE '{training_end_date}'
+                 ,INTERVAL {gap})
                 and
-                date '{training_end_date}'
-                 + interval '{gap}'
-                 + interval '{outcome_window}'
+                DATE_ADD(
+                    DATE_ADD(DATE '{training_end_date}',
+                 INTERVAL {gap}),
+                 INTERVAL {outcome_window})
             ), false
-        )::int as y
+        ) AS INT64) as y
     from
         death_testwindow_elig_perc te
         left join death_dates d on d.person_id = te.person_id
     where
         (
             d.death_date is null
-            or d.death_date >= (date '{training_end_date}' + interval '{gap}')
+            or d.death_date >= DATE_ADD(DATE '{training_end_date}', INTERVAL {gap})
         )
     ;
 
